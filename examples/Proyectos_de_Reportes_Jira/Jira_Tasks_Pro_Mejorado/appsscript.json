@@ -1,0 +1,12 @@
+{
+  "timeZone": "America/Mexico_City",
+  "dependencies": {
+    "libraries": [{
+      "userSymbol": "LibreriaCoreJira",
+      "libraryId": "ID_DE_LA_LIBRERIA_IMPLEMENTADA",
+      "version": "1"
+    }]
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8"
+}

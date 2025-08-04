@@ -1,0 +1,16 @@
+{
+  "tools": {
+    "Bash": "enabled",
+    "Read": "enabled", 
+    "Write": "enabled",
+    "Edit": "enabled",
+    "MultiEdit": "enabled",
+    "Glob": "enabled",
+    "Grep": "enabled",
+    "LS": "enabled",
+    "TodoWrite": "enabled",
+    "Task": "enabled",
+    "WebFetch": "enabled",
+    "WebSearch": "enabled"
+  }
+}

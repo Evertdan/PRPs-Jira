@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+  </head>
+  <body>
+    <div class="sidebar">
+      <div class="block">
+        <label for="persona">Selecciona una persona:</label>
+        <select id="persona">
+          <?!= personas.map(p => `<option value="${p.accountId}">${p.displayName} (${p.rol})</option>`).join('') ?>
+        </select>
+      </div>
+      <div class="block">
+        <button class="action" onclick="generarReporte()">Generar Reporte</button>
+        <button onclick="google.script.host.close()">Cerrar</button>
+      </div>
+    </div>
+    <script>
+      function generarReporte() {
+        const persona = document.getElementById('persona').value;
+        google.script.run.generarReporteSemanalCompleto({ accountId: persona });
+      }
+    </script>
+  </body>
+</html>

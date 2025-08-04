@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://ssl.gstatic.com/docs/script/css/add-ons1.css">
+    <style>
+      .dialog {
+        padding: 20px;
+        font-family: Arial, sans-serif;
+        max-width: 400px;
+      }
+      
+      .header {
+        background-color: #1e3c72;
+        color: white;
+        padding: 15px;
+        margin: -20px -20px 20px -20px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 16px;
+      }
+      
+      .form-group {
+        margin-bottom: 20px;
+      }
+      
+      label {
+        font-weight: bold;
+        display: block;
+        margin-bottom: 8px;
+        color: #333;
+      }
+      
+      input[type="date"] {
+        width: 100%;
+        padding: 10px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        box-sizing: border-box;
+        background-color: white;
+      }
+      
+      input[type="date"]:focus {
+        border-color: #4CAF50;
+        outline: none;
+        box-shadow: 0 0 5px rgba(76, 175, 80, 0.3);
+      }
+      
+      .button-container {
+        display: flex;
+        gap: 10px;
+        margin-top: 25px;
+      }
+      
+      .btn-primary {
+        background-color: #4CAF50;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        flex: 1;
+      }
+      
+      .btn-primary:hover {
+        background-color: #45a049;
+      }
+      
+      .btn-primary:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      
+      .btn-secondary {
+        background-color: #f44336;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        flex: 1;
+      }
+      
+      .btn-secondary:hover {
+        background-color: #da190b;
+      }
+      
+      .info {
+        background-color: #e8f2ff;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        font-size: 13px;
+        color: #333;
+        border-left: 4px solid #4CAF50;
+      }
+      
+      .error {
+        background-color: #ffebee;
+        color: #c62828;
+        padding: 10px;
+        border-radius: 4px;
+        margin-top: 10px;
+        font-size: 13px;
+        display: none;
+      }
+      
+      .quick-dates {
+        margin-bottom: 20px;
+      }
+      
+      .quick-dates-title {
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #333;
+      }
+      
+      .quick-date-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      
+      .quick-date-btn {
+        background-color: #e3f2fd;
+        color: #1976d2;
+        border: 1px solid #bbdefb;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        transition: all 0.2s;
+      }
+      
+      .quick-date-btn:hover {
+        background-color: #bbdefb;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dialog">
+      <div class="header">
+        📅 Seleccionar Período del Reporte
+      </div>
+      
+      <div class="info">
+        📊 Selecciona el rango de fechas para tu reporte personal. El sistema buscará todos tus registros de trabajo en este período.
+      </div>
+      
+      <div class="quick-dates">
+        <div class="quick-dates-title">⚡ Períodos rápidos:</div>
+        <div class="quick-date-buttons">
+          <button class="quick-date-btn" onclick="setQuickDate(7)">Últimos 7 días</button>
+          <button class="quick-date-btn" onclick="setQuickDate(15)">Últimos 15 días</button>
+          <button class="quick-date-btn" onclick="setQuickDate(30)">Últimos 30 días</button>
+          <button class="quick-date-btn" onclick="setCurrentMonth()">Este mes</button>
+          <button class="quick-date-btn" onclick="setPreviousMonth()">Mes anterior</button>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label for="fechaInicio">📅 Fecha de Inicio:</label>
+        <input type="date" id="fechaInicio" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="fechaFin">📅 Fecha de Fin:</label>
+        <input type="date" id="fechaFin" required>
+      </div>
+      
+      <div class="error" id="errorMessage"></div>
+      
+      <div class="button-container">
+        <button class="btn-primary" onclick="generarReporte()" id="generateBtn">
+          📊 Generar Mi Reporte
+        </button>
+        <button class="btn-secondary" onclick="google.script.host.close()">
+          ❌ Cancelar
+        </button>
+      </div>
+    </div>
+    
+    <script>
+      // Configurar fechas por defecto (últimos 30 días)
+      window.onload = function() {
+        setQuickDate(30);
+      };
+      
+      function setQuickDate(days) {
+        const hoy = new Date();
+        const fechaFin = new Date(hoy);
+        const fechaInicio = new Date(hoy);
+        fechaInicio.setDate(fechaInicio.getDate() - days);
+        
+        document.getElementById('fechaInicio').value = formatDate(fechaInicio);
+        document.getElementById('fechaFin').value = formatDate(fechaFin);
+        
+        clearError();
+      }
+      
+      function setCurrentMonth() {
+        const hoy = new Date();
+        const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+        
+        document.getElementById('fechaInicio').value = formatDate(primerDia);
+        document.getElementById('fechaFin').value = formatDate(ultimoDia);
+        
+        clearError();
+      }
+      
+      function setPreviousMonth() {
+        const hoy = new Date();
+        const primerDia = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+        const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+        
+        document.getElementById('fechaInicio').value = formatDate(primerDia);
+        document.getElementById('fechaFin').value = formatDate(ultimoDia);
+        
+        clearError();
+      }
+      
+      function formatDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      
+      function clearError() {
+        document.getElementById('errorMessage').style.display = 'none';
+      }
+      
+      function showError(message) {
+        const errorDiv = document.getElementById('errorMessage');
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+      }
+      
+      function generarReporte() {
+        const fechaInicio = document.getElementById('fechaInicio').value;
+        const fechaFin = document.getElementById('fechaFin').value;
+        
+        // Validaciones
+        if (!fechaInicio || !fechaFin) {
+          showError('Por favor selecciona ambas fechas.');
+          return;
+        }
+        
+        const inicio = new Date(fechaInicio);
+        const fin = new Date(fechaFin);
+        
+        if (fin < inicio) {
+          showError('La fecha de fin debe ser posterior a la fecha de inicio.');
+          return;
+        }
+        
+        const diferenciaDias = (fin - inicio) / (1000 * 60 * 60 * 24);
+        if (diferenciaDias > 365) {
+          showError('El período no puede ser mayor a un año (365 días).');
+          return;
+        }
+        
+        // Deshabilitar botón y mostrar progreso
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Generando...';
+        
+        // Llamar a la función del servidor
+        google.script.run
+          .withSuccessHandler(onSuccess)
+          .withFailureHandler(onFailure)
+          .generarReporteConFechas(fechaInicio, fechaFin);
+      }
+      
+      function onSuccess(result) {
+        google.script.host.close();
+      }
+      
+      function onFailure(error) {
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = false;
+        btn.textContent = '📊 Generar Mi Reporte';
+        
+        showError('Error al generar el reporte: ' + error.message);
+        console.error('Error:', error);
+      }
+      
+      // Validación en tiempo real
+      document.getElementById('fechaInicio').addEventListener('change', clearError);
+      document.getElementById('fechaFin').addEventListener('change', clearError);
+    </script>
+  </body>
+</html>

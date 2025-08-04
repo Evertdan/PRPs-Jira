@@ -1,0 +1,29 @@
+<!-- HTML para el diálogo de selección de proyectos -->
+<style>
+  /* Estilos CSS para una lista de selección moderna */
+</style>
+
+<div>
+  <h2>🏗️ Seleccionar Proyectos</h2>
+  <form id="projectForm">
+    <?!= proyectos.map(p => `
+      <div>
+        <input type="checkbox" id="${p.key}" name="proyecto" value="${p.key}">
+        <label for="${p.key}">${p.name} (${p.key})</label>
+      </div>
+    `).join('') ?>
+    <br>
+    <button type="button" onclick="procesarSeleccion()">Generar Plantillas</button>
+  </form>
+</div>
+
+<script>
+  function procesarSeleccion() {
+    const form = document.getElementById('projectForm');
+    const checkboxes = form.querySelectorAll('input[name="proyecto"]:checked');
+    const selectedKeys = Array.from(checkboxes).map(cb => cb.value);
+    google.script.run
+      .withSuccessHandler(() => google.script.host.close())
+      .procesarProyectosSeleccionados(selectedKeys);
+  }
+</script>
