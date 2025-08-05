@@ -114,7 +114,7 @@ function configurarCredencialesCCSoft() {
     const ccSoftProperties = {
       'ATLASSIAN_DOMAIN': 'ccsoft.atlassian.net',
       'ATLASSIAN_EMAIL': 'computocontable@gmail.com',
-      'ATLASSIAN_API_TOKEN': 'ATATT3xFfGF0y2bYKf7jWsrAUicb520ZCsdsf4oxXrYpAXlrfLATiyVNNYL4ZqVSNHLhEvJesQJrRZMFqhPKm9wVKLRqAQzv8Oa3E_iL9fOlSRPr3PMQDHoDa8USN5Vt-6wF1oZO5h2081wRHNuGWBTTWz_J0-sKC3Hf5kV4cnBe_ruuR7gLXEM=CC8D533A',
+      'ATLASSIAN_API_TOKEN': '',
       'JIRA_PROJECTS': '["CCSOFT"]',
       'SHEET_ID': sheetId,
       'ENVIRONMENT': 'production',
