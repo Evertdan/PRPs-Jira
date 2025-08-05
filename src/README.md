@@ -1,13 +1,22 @@
-# Sistema de Sincronización Jira ↔ Google Sheets
+# Sistema Jira-Sheets Unificado v2.0
 
 ## Descripción
-Sistema completo de sincronización bidireccional entre Jira y Google Sheets construido con Google Apps Script siguiendo las mejores prácticas de CLAUDE.md.
+**Sistema completo de sincronización bidireccional entre Jira y Google Sheets con análisis avanzado de entregables y reportes de sprints.**
+
+**🔥 COMPLETAMENTE AUTOCONTENIDO - Sin dependencias externas:**
+- Todas las funciones de LibreriaCoreJira integradas directamente
+- Sistema de sincronización Jira ↔ Sheets mejorado
+- Reportes de Sprints y Entregables incluidos
+- Análisis de entregables avanzado incorporado
+- Patrones obligatorios de CLAUDE.md implementados
 
 ## Características Principales
 
 ### 🔄 Sincronización Bidireccional
 - **Jira → Sheets**: Descarga automática de issues con toda la metadata
 - **Sheets → Jira**: Actualización de status, asignación y prioridad desde Sheets
+- **Análisis de Entregables**: Evaluación automática de calidad de documentación
+- **Reportes de Sprints**: Generación automática de reportes por período
 - **Tiempo Real**: Triggers automáticos cada 15 minutos (Jira→Sheets) y 5 minutos (Sheets→Jira)
 
 ### 🚀 Performance Optimizado
@@ -44,7 +53,25 @@ src/
 
 ## Configuración Inicial
 
-### 1. Configurar Propiedades en Apps Script
+### ⚡ Configuración Rápida para CC Soft
+
+**OPCIÓN MÁS FÁCIL:** Usar el menú de Google Sheets:
+
+1. Abrir el Google Sheet donde se pegó el código
+2. Ir al menú **"🔄 Jira Sync"** → **"🏢 Configurar CC Soft"**
+3. Se configurarán automáticamente todas las credenciales:
+   - ✅ **Dominio:** `https://ccsoft.atlassian.net`
+   - ✅ **Email:** `computocontable@gmail.com`
+   - ✅ **Token API:** Configurado automáticamente
+   - ✅ **Proyectos:** `["CCSOFT"]`
+   - ✅ **Sheet ID:** Detectado automáticamente
+4. Se verificará la conectividad inmediatamente
+
+**¡LISTO!** El sistema quedará configurado y listo para usar.
+
+---
+
+### 1. Configuración Manual (Alternativa)
 
 ```javascript
 // Ejecutar en Apps Script Editor:
@@ -78,17 +105,23 @@ function configurarPropiedadesSeguras() {
 setupInicial()
 ```
 
+**🎯 IMPORTANTE: Todo el código está autocontenido en los archivos .gs - No se necesitan librerías externas**
+
 ## Uso
 
 ### Menú de Google Sheets
 Una vez configurado, el menú "🔄 Jira Sync" estará disponible con las siguientes opciones:
 
 - **🔽 Sincronizar Jira → Sheets**: Descarga issues de Jira
-- **🔼 Sincronizar Sheets → Jira**: Aplica cambios desde Sheets a Jira
+- **🔼 Sincronizar Sheets → Jira**: Aplica cambios desde Sheets a Jira  
 - **🔄 Sincronización Completa**: Ejecuta ambas sincronizaciones
-- **⚙️ Configurar Sincronización**: Ver configuración actual
+- **📊 Generar Reporte de Sprints**: Reportes por período con análisis
+- **⚙️ Configurar Credenciales**: Configurar acceso a Jira
+- **⚙️ Mostrar Configuración**: Ver configuración actual
 - **📊 Health Check**: Verificar estado del sistema
 - **📈 Ver Métricas**: Dashboard de performance
+- **🧪 Test Análisis Entregables**: Validar sistema de análisis
+- **🧪 Test Ordenamiento Sprints**: Validar ordenamiento de sprints
 - **🧪 Ejecutar Tests**: Suite completa de validaciones
 - **🚀 Setup Inicial**: Configuración completa del sistema
 
@@ -131,10 +164,96 @@ Los cambios se detectan automáticamente y se sincronizan con Jira en máximo 5 
 | P | Last Sync | Última sincronización |
 | Q | Sync Status | Estado de sync (OK/ERROR/PENDING) |
 
+### Columnas de Análisis de Entregables (Nuevas)
+| Columna | Campo | Descripción |
+|---------|-------|-------------|
+| R | Deliverables Score | Puntuación de entregables (0-100+) |
+| S | Quality Level | Nivel de calidad (EXCELENTE/BUENO/BASICO/etc.) |
+| T | Deliverables Summary | Resumen de entregables encontrados |
+| U | Attachments | Número de archivos adjuntos |
+| V | Comments | Número de comentarios |
+
 ### Otras Hojas
 - **Sync Log**: Logs de sincronización y errores
-- **Configuration**: Configuración y estado del sistema
+- **Configuration**: Configuración y estado del sistema  
 - **Metrics Dashboard**: Métricas visuales y performance
+- **Deliverables Analysis**: Análisis detallado de entregables
+- **Sprint_[Período]**: Reportes de sprints individuales (ej: Sprint_Q1_S1_24)
+
+## 📊 Sistema de Análisis de Entregables
+
+### Evaluación Automática de Calidad
+
+El sistema evalúa automáticamente la calidad de la documentación de cada issue analizando:
+
+| Elemento | Puntos | Descripción |
+|----------|--------|-------------|
+| 📎 Archivo adjunto | 5 pts | Documentos, archivos de cualquier tipo |
+| 📷 Imagen | 7 pts | Screenshots, diagramas, imágenes |
+| 🔀 Pull Request | 15 pts | Enlaces a pull requests |
+| 📝 Commit | 10 pts | Referencias a commits o repositories |
+| 🔗 Enlace externo | 3 pts | URLs a documentación externa |
+| 💬 Comentario detallado | 2 pts | Comentarios >100 caracteres |
+| 📋 Campo personalizado | 4 pts | Campos personalizados con contenido |
+
+### Niveles de Calidad
+
+Basado en la puntuación acumulada:
+
+- **🟢 EXCELENTE** (25+ pts): Excelente documentación y evidencia
+- **🟡 BUENO** (15+ pts): Buena documentación con evidencia suficiente
+- **🟠 BASICO** (8+ pts): Documentación básica, evidencia mínima
+- **🔴 INSUFICIENTE** (3+ pts): Documentación insuficiente
+- **⚪ SIN_EVIDENCIA** (0 pts): Sin evidencia o documentación
+
+### Funciones de Análisis
+
+```javascript
+// Analizar entregables de un issue específico
+const analisis = evaluarEntregablesYEvidencia(issue);
+console.log(analisis.calidad.nivel);     // 'EXCELENTE'
+console.log(analisis.puntuacion);        // 28
+console.log(analisis.resumen);           // '3 archivo(s) (2 imagen/es), 1 PR(s), 2 enlace(s)'
+
+// Detectar patrones específicos
+console.log(analisis.pullRequests.length);  // Número de PRs detectados
+console.log(analisis.commits.length);       // Número de commits detectados
+console.log(analisis.imagenes.length);      // Número de imágenes
+```
+
+## 📈 Reportes de Sprints
+
+### Generación Automática
+
+El sistema puede generar reportes por grupos de sprints siguiendo el patrón `Q#-S#-Año`:
+
+```javascript
+// Mostrar diálogo de selección de sprint
+mostrarDialogoGrupos();
+
+// Generar reporte específico
+generarReportePorGrupo('Q1-S1-24');
+
+// Obtener grupos disponibles
+const grupos = obtenerGruposDeSprintsPorPrefijo();
+```
+
+### Características de los Reportes
+
+- **Agrupación inteligente** por trimestre y sprint
+- **Análisis de entregables** integrado en cada issue
+- **Validación de nomenclatura** de sprints
+- **Formato consolidado** en hojas separadas
+- **Métricas por proyecto** y equipo
+
+### Patrón de Nomenclatura
+
+Los sprints deben seguir el formato: `Q[1-4]-S[1-6]-[Año]`
+
+Ejemplos válidos:
+- `Q1-S1-24` (Trimestre 1, Sprint 1, 2024)
+- `Q2-S3-2024` (Trimestre 2, Sprint 3, 2024)
+- `Q4-S6-25` (Trimestre 4, Sprint 6, 2025)
 
 ## Comandos de Desarrollo
 
@@ -255,8 +374,10 @@ El sistema envía alertas por email automáticamente para:
 
 ---
 
-**Versión**: 1.0.0  
-**Fecha**: 2025-01-04  
+**Versión**: 2.0.0  
+**Fecha**: 2025-01-07  
 **Arquitectura**: Google Apps Script + Atlassian APIs  
 **Patrones**: CLAUDE.md compliant  
+**Funcionalidades**: Sincronización + Análisis de Entregables + Reportes de Sprints  
+**Compatibilidad**: LibreriaCoreJira + Sistema original  
 **Estado**: Listo para producción ✅

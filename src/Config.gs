@@ -1,21 +1,18 @@
 /**
- * Config.gs - Configuración y constantes para Jira-Sheets Sync
- * Siguiendo estándares CLAUDE.md para Google Apps Script + Atlassian
+ * Config.gs - Configuración central del sistema Jira-Sheets unificado
+ * Implementa patrones obligatorios de CLAUDE.md
+ * Integra funcionalidades de reportes de sprints y análisis de entregables
  */
 
 // OBLIGATORIO: Versionado en cada deployment
-const VERSION = '1.0.0';
-const BUILD_DATE = '2025-01-04';
+const VERSION = '2.0.1';
+const BUILD_DATE = '2025-08-04';
 
 // Configuración específica de Jira
 const JIRA_CONFIG = {
-  PROJECTS: ['PROJ1', 'PROJ2'], // Se sobrescribe desde PropertiesService
   SYNC_INTERVAL: 15, // minutos entre sincronizaciones automáticas
-  BATCH_SIZE: 50, // issues por lote para optimizar performance
+  BATCH_SIZE:    50,    // issues por lote para optimizar performance
   MAX_ISSUES: 10000, // límite total para prevenir sobrecarga
-  RATE_LIMIT_DELAY: 100, // 100ms = máximo 10 req/seg (límite Jira)
-  MAX_RETRY_ATTEMPTS: 3,
-  TIMEOUT_MS: 30000 // 30 segundos timeout por request
 };
 
 // Configuración de Google Sheets
@@ -23,54 +20,45 @@ const SHEETS_CONFIG = {
   MAIN_SHEET: 'Jira Issues',
   LOG_SHEET: 'Sync Log',
   CONFIG_SHEET: 'Configuration',
-  METRICS_SHEET: 'Metrics Dashboard'
+  METRICS_SHEET: 'Metrics Dashboard',
+  SPRINT_REPORTS_PREFIX: 'Sprint_',
+  ERROR_LOG_SHEET: 'Error Logs'
 };
 
 // Schema de columnas en Sheets (orden fijo para performance)
 const SHEET_COLUMNS = {
-  A: 'Key',           // PROJ-123
-  B: 'Summary',       // Título del issue
-  C: 'Status',        // To Do, In Progress, Done
-  D: 'Assignee',      // Email del asignado
-  E: 'Priority',      // High, Medium, Low
-  F: 'Issue Type',    // Story, Bug, Task
-  G: 'Created',       // Fecha de creación
-  H: 'Updated',       // Última actualización
-  I: 'Reporter',      // Creador del issue
-  J: 'Labels',        // Labels concatenados
-  K: 'Sprint',        // Sprint actual
-  L: 'Story Points',  // Estimación
-  M: 'Components',    // Componentes del proyecto
-  N: 'Description',   // Descripción (truncada a 500 chars)
-  O: 'Jira URL',      // Link directo al issue
-  P: 'Last Sync',     // Timestamp de última sincronización
-  Q: 'Sync Status'    // OK, ERROR, PENDING
+  A: 'Key', B: 'Summary', C: 'Status', D: 'Assignee', E: 'Priority',
+  F: 'Issue Type', G: 'Created', H: 'Updated', I: 'Reporter', J: 'Labels',
+  K: 'Sprint', L: 'Story Points', M: 'Components', N: 'Description',
+  O: 'Jira URL', P: 'Last Sync', Q: 'Sync Status',
+  // Columnas de Análisis de Entregables
+  R: 'Deliverables Score', S: 'Quality Level', T: 'Deliverables Summary',
+  U: 'Attachments', V: 'Comments'
 };
 
 // Límites de Apps Script
 const APPS_SCRIPT_LIMITS = {
-  EXECUTION_TIME_MS: 6 * 60 * 1000, // 6 minutos máximo
+  EXECUTION_TIME_MS: 6 * 60 * 1000,
   EXECUTION_BUFFER_MS: 5 * 60 * 1000, // 5 minutos con buffer
   URL_FETCH_DAILY: 20000,
   EMAIL_DAILY: 100,
   PROPERTIES_DAILY: 50000,
-  SHEET_CELLS_MAX: 10000000 // 10M celdas por sheet
+  SHEET_CELLS_MAX: 10000000
 };
 
 // Rate limiting y quotas
 const RATE_LIMITS = {
-  JIRA_REQUESTS_PER_SECOND: 10,
-  MIN_REQUEST_INTERVAL_MS: 100,
+  MIN_REQUEST_INTERVAL_MS: 100, // 10 req/seg
   BATCH_DELAY_MS: 1000,
   EXPONENTIAL_BACKOFF_BASE: 2,
   MAX_BACKOFF_MS: 30000
 };
 
 /**
- * Obtiene la configuración completa desde PropertiesService
- * Siguiendo patrón obligatorio de CLAUDE.md para configuración segura
- * @returns {Object} Configuración completa validada
- * @throws {Error} Si faltan propiedades requeridas
+ * Obtiene la configuración completa desde PropertiesService.
+ * Esta es la única función que se debe usar para leer la configuración.
+ * @returns {Object} Configuración completa validada.
+ * @throws {Error} Si faltan propiedades requeridas.
  */
 function obtenerConfiguracion() {
   const propiedades = PropertiesService.getScriptProperties();
@@ -81,172 +69,246 @@ function obtenerConfiguracion() {
     apiToken: propiedades.getProperty('ATLASSIAN_API_TOKEN'),
     projects: JSON.parse(propiedades.getProperty('JIRA_PROJECTS') || '[]'),
     sheetId: propiedades.getProperty('SHEET_ID'),
-    environment: propiedades.getProperty('ENVIRONMENT') || 'development',
+    environment: propiedades.getProperty('ENVIRONMENT') || 'production',
     alertEmail: propiedades.getProperty('ALERT_EMAIL')
   };
   
-  // Validar que todas las propiedades críticas estén presentes
-  const camposRequeridos = ['domain', 'email', 'apiToken', 'sheetId'];
-  camposRequeridos.forEach(campo => {
-    if (!config[campo]) {
-      throw new Error(`Configuración faltante: ${campo}. Configurar en PropertiesService.`);
+  const camposRequeridos = ['domain', 'email', 'apiToken', 'sheetId', 'projects'];
+  for (const campo of camposRequeridos) {
+    if (!config[campo] || (Array.isArray(config[campo]) && config[campo].length === 0)) {
+      throw new Error(`Configuración faltante o inválida: '${campo}'. Por favor, ejecute la configuración desde el menú: "Jira Sync" > "🏢 Configurar CC Soft"`);
     }
-  });
-  
-  // Validar formato domain
-  if (!config.domain.includes('.atlassian.net')) {
-    throw new Error('ATLASSIAN_DOMAIN debe tener formato: empresa.atlassian.net');
   }
   
-  // Validar proyectos
-  if (!Array.isArray(config.projects) || config.projects.length === 0) {
-    throw new Error('JIRA_PROJECTS debe ser un array JSON con al menos un proyecto');
+  // Normalizar dominio
+  config.domain = config.domain.replace(/https?:\]\/\//, '');
+  if (!config.domain.includes('.atlassian.net')) {
+    throw new Error('El formato de ATLASSIAN_DOMAIN es inválido. Debe ser "empresa.atlassian.net".');
   }
   
   return config;
 }
 
 /**
- * Obtiene configuración específica por entorno
- * Patrón obligatorio de CLAUDE.md para diferentes ambientes
- * @returns {Object} Configuración optimizada por entorno
- */
-function obtenerConfiguracionPorEntorno() {
-  const entorno = PropertiesService.getScriptProperties().getProperty('ENVIRONMENT') || 'development';
-  
-  const configuraciones = {
-    development: {
-      logLevel: 'DEBUG',
-      rateLimitDelay: 500, // Más conservador en dev
-      maxRetries: 2,
-      batchSize: 10, // Lotes pequeños para testing
-      syncInterval: 30 // 30 min en dev
-    },
-    staging: {
-      logLevel: 'INFO',
-      rateLimitDelay: 200,
-      maxRetries: 3,
-      batchSize: 25,
-      syncInterval: 20 // 20 min en staging
-    },
-    production: {
-      logLevel: 'WARN',
-      rateLimitDelay: 100,
-      maxRetries: 5,
-      batchSize: 50, // Lotes grandes para efficiency
-      syncInterval: 15 // 15 min en producción
-    }
-  };
-  
-  return configuraciones[entorno] || configuraciones.development;
-}
-
-/**
- * Obtiene información de versión del sistema
- * @returns {Object} Información de versión y build
+ * Obtiene información de versión del sistema.
+ * @returns {Object} Información de versión y build.
  */
 function getVersion() {
   return {
     version: VERSION,
     buildDate: BUILD_DATE,
-    environment: PropertiesService.getScriptProperties().getProperty('ENVIRONMENT') || 'development'
+    environment: PropertiesService.getScriptProperties().getProperty('ENVIRONMENT') || 'production'
   };
 }
 
 /**
- * Configuración inicial - EJECUTAR UNA SOLA VEZ
- * Setup de propiedades seguras siguiendo CLAUDE.md
+ * Configura las credenciales y propiedades del sistema.
+ * Este es el método principal y recomendado para la configuración inicial.
  */
-function configurarPropiedadesSeguras() {
-  const properties = PropertiesService.getScriptProperties();
-  
-  // ⚠️ REEMPLAZAR CON VALORES REALES
-  const defaultProperties = {
-    'ATLASSIAN_DOMAIN': 'tu-empresa.atlassian.net',
-    'ATLASSIAN_EMAIL': 'tu-email@empresa.com',
-    'ATLASSIAN_API_TOKEN': 'ATATT3xFfGF0...', // Generar en: id.atlassian.com/manage-profile/security/api-tokens
-    'JIRA_PROJECTS': '["PROJ1", "PROJ2"]', // JSON array de project keys
-    'SHEET_ID': '1Abc-DeF_GhI...', // ID del Google Sheet
-    'ENVIRONMENT': 'development',
-    'ALERT_EMAIL': 'admin@empresa.com'
-  };
-  
-  // Solo establecer propiedades que no existen
-  Object.keys(defaultProperties).forEach(key => {
-    if (!properties.getProperty(key)) {
-      properties.setProperty(key, defaultProperties[key]);
-    }
-  });
-  
-  logEstructurado('SUCCESS', 'Propiedades configuradas', {
-    mensaje: 'IMPORTANTE: Actualizar con valores reales antes de usar en producción'
-  });
+function configurarCredencialesCCSoft() {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const sheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+
+    const ccSoftProperties = {
+      'ATLASSIAN_DOMAIN': 'ccsoft.atlassian.net',
+      'ATLASSIAN_EMAIL': 'computocontable@gmail.com',
+      'ATLASSIAN_API_TOKEN': 'ATATT3xFfGF0y2bYKf7jWsrAUicb520ZCsdsf4oxXrYpAXlrfLATiyVNNYL4ZqVSNHLhEvJesQJrRZMFqhPKm9wVKLRqAQzv8Oa3E_iL9fOlSRPr3PMQDHoDa8USN5Vt-6wF1oZO5h2081wRHNuGWBTTWz_J0-sKC3Hf5kV4cnBe_ruuR7gLXEM=CC8D533A',
+      'JIRA_PROJECTS': '["CCSOFT"]',
+      'SHEET_ID': sheetId,
+      'ENVIRONMENT': 'production',
+      'ALERT_EMAIL': 'computocontable@gmail.com'
+    };
+
+    properties.setProperties(ccSoftProperties, false);
+    
+    logEstructurado('SUCCESS', '✅ Credenciales CC Soft configuradas correctamente.', {
+      domain: ccSoftProperties.ATLASSIAN_DOMAIN,
+      sheetId: sheetId.substring(0, 10) + '...'
+    });
+
+    testConectividadAtlassian();
+    logEstructurado('SUCCESS', '🟢 Conectividad verificada exitosamente.');
+    
+    ui.alert('✅ Configuración Exitosa', 
+      'Credenciales de CC Soft configuradas y verificadas:\n\n' + 
+      '✓ Dominio: ' + ccSoftProperties.ATLASSIAN_DOMAIN + '\n' + 
+      '✓ Email: ' + ccSoftProperties.ATLASSIAN_EMAIL + '\n' + 
+      '✓ Proyectos: ' + ccSoftProperties.JIRA_PROJECTS + '\n' + 
+      '✓ Sheet ID: Detectado automáticamente\n\n' + 
+      'El sistema está listo para usar.',
+      ui.ButtonSet.OK
+    );
+    
+  } catch (error) {
+    logEstructurado('ERROR', '🔴 Error en la configuración o conectividad', { error: error.message });
+    ui.alert('⚠️ Error de Configuración', 
+      'Ocurrió un error:\n\n' + error.message + '\n\n' +
+      'Verifica que:\n' + 
+      '• El token de API sea válido y no haya expirado.\n' + 
+      '• Tengas permisos en el dominio Jira de CC Soft.',
+      ui.ButtonSet.OK
+    );
+  }
 }
 
 /**
- * Mapeo de custom fields por proyecto
- * Configuración específica para campos personalizados de Jira
- * @param {string} projectKey - Clave del proyecto
- * @returns {Object} Mapeo de custom fields
+ * Mapeo de custom fields por proyecto.
+ * @param {string} projectKey - Clave del proyecto.
+ * @returns {Object} Mapeo de custom fields.
  */
 function getCustomFieldsMapping(projectKey) {
   const mappings = {
-    'PROJ1': {
-      'customfield_10001': 'Story Points',
-      'customfield_10002': 'Sprint',
-      'customfield_10003': 'Epic Link'
-    },
-    'PROJ2': {
-      'customfield_10004': 'Business Value',
-      'customfield_10005': 'Team',
-      'customfield_10006': 'Customer Impact'
+    'CCSOFT': {
+      'customfield_10016': 'Story Points',
+      'customfield_10020': 'Sprint',
+      'customfield_10003': 'Epic Link',
+      'customfield_10230': 'Comentarios Adicionales',
+      'customfield_10231': 'Desviaciones'
     }
   };
-  
   return mappings[projectKey] || {};
 }
 
 /**
- * Validación de datos de entrada para issues
- * Patrón obligatorio de CLAUDE.md para validación
- * @param {Object} datos - Datos del issue a validar
- * @returns {Object} Datos validados y sanitizados
- * @throws {Error} Si faltan campos requeridos
+ * Validación de datos de entrada para issues.
+ * @param {Object} datos - Datos del issue a validar.
+ * @returns {Object} Datos validados y sanitizados.
+ * @throws {Error} Si faltan campos requeridos.
  */
 function validarDatosIssue(datos) {
   const camposRequeridos = ['summary', 'project', 'issuetype'];
-  
-  camposRequeridos.forEach(campo => {
-    if (!datos[campo]) {
-      throw new Error(`Campo requerido faltante: ${campo}`);
-    }
-  });
-  
-  // Sanitizar strings
+  for (const campo of camposRequeridos) {
+    if (!datos[campo]) throw new Error(`Campo requerido faltante: ${campo}`);
+  }
+
   if (datos.summary) {
     datos.summary = datos.summary.toString().trim().substring(0, 255);
   }
   
   if (datos.description) {
-    // Remover HTML básico para prevenir XSS
     datos.description = datos.description.toString()
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
       .replace(/<[^>]*>/g, '')
       .trim()
-      .substring(0, 32767); // Límite de Jira para descripción
+      .substring(0, 32767);
   }
   
   return datos;
 }
 
 /**
- * Configuración de validación de datos para Google Sheets
- * @returns {Object} Reglas de validación por columna
+ * Configuración de validación de datos para Google Sheets.
+ * @returns {Object} Reglas de validación por columna.
  */
 function getValidationRules() {
   return {
-    Status: ['To Do', 'In Progress', 'Code Review', 'Testing', 'Done'],
+    Status: ['To Do', 'In Progress', 'Done', 'Blocked', 'In Review'],
     Priority: ['Highest', 'High', 'Medium', 'Low', 'Lowest'],
-    'Issue Type': ['Epic', 'Story', 'Task', 'Bug', 'Subtask']
+    'Issue Type': ['Story', 'Task', 'Bug', 'Epic', 'Sub-task']
   };
+}
+
+// ========================================
+// CONFIGURACIÓN DE ANÁLISIS DE ENTREGABLES
+// ========================================
+
+const CONFIG_ENTREGABLES = {
+  PESOS: {
+    ARCHIVO_ADJUNTO: 5, IMAGEN_ADJUNTO: 7, PULL_REQUEST: 15, COMMIT: 10,
+    ENLACE_EXTERNO: 3, COMENTARIO_DETALLADO: 2, CAMPO_PERSONALIZADO: 4, WORKLOG_ENTRY: 3
+  },
+  NIVELES: {
+    EXCELENTE: { min: 25, texto: 'Excelente', color: '#E3FCEF', emoji: '🟢' },
+    BUENO: { min: 15, texto: 'Bueno', color: '#FFF0B3', emoji: '🟡' },
+    BASICO: { min: 8, texto: 'Básico', color: '#FEF2E0', emoji: '🟠' },
+    INSUFICIENTE: { min: 3, texto: 'Insuficiente', color: '#FFEBE6', emoji: '🔴' },
+    SIN_EVIDENCIA: { min: 0, texto: 'Sin Evidencia', color: '#EBECF0', emoji: '⚪' }
+  }
+};
+
+const CAMPOS_ENTREGABLES = {
+  comentarios: 'customfield_10230',
+  desviaciones: 'customfield_10231',
+  storyPoints: 'customfield_10016',
+  epic: 'customfield_10003',
+  sprint: 'customfield_10020'
+};
+
+// ========================================
+// CONFIGURACIÓN DE CACHE
+// ========================================
+
+const CACHE_CONFIG = {
+  PROJECTS: 'JIRA_PROJECTS_CACHE',
+  SPRINTS: 'JIRA_SPRINTS_CACHE',
+  DEFAULT_EXPIRATION: 3600 // 1 hora en segundos
+};
+
+// ========================================
+// SETUP Y TESTS DE CONFIGURACIÓN
+// ========================================
+
+/**
+ * Setup inicial completo del sistema.
+ */
+function setupInicial() {
+  const ui = SpreadsheetApp.getUi();
+  logEstructurado('INFO', '🚀 Iniciando setup inicial del sistema...');
+  
+  try {
+    // 1. Configurar y verificar credenciales
+    configurarCredencialesCCSoft();
+    
+    // 2. Crear estructura de hojas
+    crearEstructuraCompletaSheets();
+    
+    // 3. Configurar triggers
+    configurarTriggers();
+    
+    // 4. Inicializar monitoreo
+    new QuotaManager().reset();
+    new MetricsCollector().reset();
+    
+    logEstructurado('SUCCESS', '✅ Setup inicial completado.');
+    ui.alert('🎉 Setup Completado', 'El sistema ha sido configurado exitosamente y está listo para usar.', ui.ButtonSet.OK);
+    
+  } catch (error) {
+    logEstructurado('ERROR', '❌ Error en setup inicial', { error: error.message });
+    ui.alert('❌ Error en Setup', 'Ocurrió un error: ' + error.message, ui.ButtonSet.OK);
+    throw error;
+  }
+}
+
+/**
+ * Test básico de conectividad con Atlassian.
+ */
+function testConectividadAtlassian() {
+  try {
+    const config = obtenerConfiguracion();
+    const options = {
+      method: 'GET',
+      headers: { 
+        "Authorization": "Basic " + Utilities.base64Encode(config.email + ":" + config.apiToken),
+        "Content-Type": "application/json"
+      },
+      muteHttpExceptions: true
+    };
+
+    const url = `https://${config.domain}/rest/api/3/myself`;
+    const response = UrlFetchApp.fetch(url, options);
+    
+    if (response.getResponseCode() !== 200) {
+      throw new Error(`Fallo de conectividad: HTTP ${response.getResponseCode()}. Verifique el token de API y los permisos.`);
+    }
+    
+    const userData = JSON.parse(response.getContentText());
+    logEstructurado('SUCCESS', 'Conectividad Atlassian verificada', { user: userData.displayName });
+    return true;
+    
+  } catch (error) {
+    logEstructurado('ERROR', 'Error de conectividad Atlassian', { error: error.message });
+    throw new Error(`Test de conectividad falló: ${error.message}`);
+  }
 }
